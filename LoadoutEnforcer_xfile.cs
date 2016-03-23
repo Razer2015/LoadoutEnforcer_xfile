@@ -52,6 +52,17 @@ namespace PRoConEvents
         NOKIT
     }
 
+    public enum category
+    {
+        PRIMARY,
+        SECONDARY,
+        GADGET1,
+        GADGET2,
+        GRENADE,
+        MELEE,
+        SPECIALIZATION
+    }
+
     public class compact
     {
         public bool enabled { get; set; }
@@ -136,6 +147,14 @@ namespace PRoConEvents
             GADGET = new List<Status>();
             GRENADE = new List<Status>();
         }
+    }
+
+    public class Replace
+    {
+        public String name { get; set; }
+        public category type { get; set; }
+        public Int64 old_key { get; set; }
+        public Int64 new_key { get; set; }
     }
 
     public class Status
@@ -250,6 +269,7 @@ namespace PRoConEvents
         private String currentLevel;
         public string[] SpawningEnum = new String[] { "Spawning allowed", "Spawning not allowed", "One spawn allowed" };
         public string[] CategoryEnum = new String[] { "Weapons", "Accessories", "Kititems" };
+        public List<Replace> replaces;
 
         public LoadoutEnforcer_xfile()
         {
@@ -547,7 +567,7 @@ namespace PRoConEvents
         }
         public string GetPluginVersion()
         {
-            return "0.0.0.4";
+            return "0.0.0.5";
         }
         public string GetPluginAuthor()
         {
@@ -564,10 +584,11 @@ namespace PRoConEvents
 <p>Plugin to disallow spawning with certain weapons/attachments in loadout.</p>
 
 <h2>Commands</h2>
-<p><b>!myl <optional (admin only): nick>, !myloadout</b> Check what is wrong with the loadout</p>
+<p><b>!myl [optional (admin only): nick], !myloadout</b> Check what is wrong with the loadout</p>
 <p><b>!loadoutcheck</b> Check which limits are enabled (Admin only)</p>
-<p><b>!violations <optional (admin only): nick></b> Check how many violations the user has broken</p>
+<p><b>!violations [optional (admin only): nick]</b> Check how many violations the user has broken</p>
 <p><b>!violations</b> Check how many players have broken rules</p>
+<p><b>!remviol [nick]</b> Reset the violation count for player</p>
 
 <h2>Settings</h2>
 <blockquote>
@@ -606,13 +627,19 @@ namespace PRoConEvents
 <p>Developed by xfileFIN</p>
 <blockquote>
 <h4>TODO:</h4>
-	- Reset the violation count for people who violated the One spawn allowed rule (Due to the bugs)<br/>
+	- Nothing... <br/>
 </blockquote>
 
 <h3>Changelog</h3>
 <blockquote>
+<h4>0.0.0.5 (23.3.2016)</h4>
+	- fixed error in checking with old codes (not necessarily have all the codes yet)<br/>
+	- added @remviol [nick] commands<br/>
+</blockquote>
+
+<blockquote>
 <h4>0.0.0.4 (19.3.2016)</h4>
-	- added @violations & @violations <nick> commands<br/>
+	- added @violations & @violations [nick] commands<br/>
     - added checks the current map on first spawn to eliminate wrong map in limit checking<br/>
 </blockquote>
 
@@ -1556,6 +1583,7 @@ namespace PRoConEvents
             Match cmd_mapName = Regex.Match(message, @"[!@#/]mapname", RegexOptions.IgnoreCase);
             Match cmd_loadout_violations_other = Regex.Match(message, @"[!@#/]violations\s+([^\s]+)", RegexOptions.IgnoreCase);
             Match cmd_loadout_violations_all = Regex.Match(message, @"[!@#/]violations", RegexOptions.IgnoreCase);
+            Match cmd_reset_violations = Regex.Match(message, @"[!@#/]remviol\s+([^\s]+)", RegexOptions.IgnoreCase);
             //Match cmd_mapName = Regex.Match(message, @"[!@#/]mapname", RegexOptions.IgnoreCase);
 
             #region cmd_loadout_other
@@ -1693,6 +1721,47 @@ namespace PRoConEvents
                     violations.Start();
                 }
                 return;
+            }
+            #endregion
+            #region cmd_reset_violations
+            else if (cmd_reset_violations.Success)
+            {
+                Boolean permission = false;
+
+                String target = BestPlayerMatch(message, speaker, cmd_reset_violations);
+                if (String.IsNullOrEmpty(target))
+                    return;
+
+                CPrivileges cpSpeakerPrivs = this.GetAccountPrivileges(speaker);
+                if (cpSpeakerPrivs.CanKillPlayers)
+                    permission = true;
+
+                if (!permission)
+                {
+                    ServerCommand("admin.say", "Not enough privileges to issue this command!", "player", speaker);
+                    return;
+                }
+                else
+                {
+                    if (!player_kits.ContainsKey(target))
+                    {
+                        ServerCommand("admin.say", String.Format("Didn't find player_kit for {0}", target), "player", speaker);
+                        return;
+                    }
+                    if(player_kits[target].VIOLATIONS > 0)
+                    {
+                        player_kits[target].VIOLATIONS = 0;
+                        player_kits[target].VIOLATION_REASONS = new List<String>();
+                        ServerCommand("admin.say", String.Format("Violation count for {0} is now {1}", target, speaker), "player", speaker);
+                        ServerCommand("admin.say", String.Format("Your violation count has been reseted by {0}, don't break them anymore!", speaker), "player", target);
+                        return;
+                    }
+                    else
+                    {
+                        ServerCommand("admin.say", String.Format("Violation count for {0} was already {1}", target, speaker), "player", speaker);
+                        return;
+                    }
+                }
             }
             #endregion
         }
@@ -2341,21 +2410,21 @@ namespace PRoConEvents
                 string[] Kit = ((IEnumerable)kits[selectedKit]).Cast<object>().Select(x => x.ToString()).ToArray();
 
                 // PRIMARY_WEAPON & attachments
-                player_kits[soldierName].PRIMARY_WEAPON.Key = Kit[0];
+                player_kits[soldierName].PRIMARY_WEAPON.Key = fixKey(Convert.ToInt64(Kit[0]) , category.PRIMARY).ToString();
                 player_kits[soldierName].PRIMARY_WEAPON = getPrimaryAttachments(weapons, player_kits[soldierName].PRIMARY_WEAPON);
                 // SIDEARM & attachments
-                player_kits[soldierName].SIDEARM.Key = Kit[1];
+                player_kits[soldierName].SIDEARM.Key = fixKey(Convert.ToInt64(Kit[1]) , category.SECONDARY).ToString();
                 player_kits[soldierName].SIDEARM = getSidearmAttachments(weapons, player_kits[soldierName].SIDEARM);
                 // GADGET_1
-                player_kits[soldierName].GADGET_1 = Kit[2];
+                player_kits[soldierName].GADGET_1 = fixKey(Convert.ToInt64(Kit[2]), category.GADGET1).ToString();
                 // GADGET_2
-                player_kits[soldierName].GADGET_2 = Kit[3];
+                player_kits[soldierName].GADGET_2 = fixKey(Convert.ToInt64(Kit[3]), category.GADGET2).ToString();
                 // GRENADES
-                player_kits[soldierName].GRENADES = Kit[4];
+                player_kits[soldierName].GRENADES = fixKey(Convert.ToInt64(Kit[4]), category.GRENADE).ToString();
                 // MELEE
-                player_kits[soldierName].MELEE = Kit[5];
+                player_kits[soldierName].MELEE = fixKey(Convert.ToInt64(Kit[5]), category.MELEE).ToString();
                 // FIELD_UPGRADES
-                player_kits[soldierName].FIELD_UPGRADES = Kit[6];
+                player_kits[soldierName].FIELD_UPGRADES = fixKey(Convert.ToInt64(Kit[6]), category.SPECIALIZATION).ToString();
                 // UNK_7
                 //player_kits[soldierName].UNK_7 = Kit[7];
                 // UNK_8
@@ -2411,7 +2480,7 @@ namespace PRoConEvents
                 }
                 return (primary_weapon);
             }
-            catch
+            catch (Exception e)
             {
                 primary_weapon.OPTIC = "0";
                 primary_weapon.ACCESSORY = "0";
@@ -2419,6 +2488,15 @@ namespace PRoConEvents
                 primary_weapon.UNDERBARREL = "0";
                 primary_weapon.PAINT = "0";
                 primary_weapon.AMMO = "0";
+
+                DebugWrite("Couldn't find weapon with ID: " + primary_weapon.Key, 3);
+                using (StreamWriter sw = new StreamWriter(Path.ChangeExtension(log_path, ".err")))
+                {
+                    sw.WriteLine(DateTime.Now.ToString());
+                    sw.WriteLine(e.ToString());
+                    sw.WriteLine("Weapon key: " + primary_weapon.Key);
+                    sw.WriteLine(String.Empty);
+                }
                 return (primary_weapon);
             }
         }
@@ -2444,12 +2522,21 @@ namespace PRoConEvents
                 }
                 return (sidearm);
             }
-            catch
+            catch (Exception e)
             {
                 sidearm.OPTIC = "0";
                 sidearm.ACCESSORY = "0";
                 sidearm.BARREL = "0";
                 sidearm.PAINT = "0";
+
+                DebugWrite("Couldn't find sidearm with ID: " + sidearm.Key, 3);
+                using (StreamWriter sw = new StreamWriter(Path.ChangeExtension(log_path, ".err")))
+                {
+                    sw.WriteLine(DateTime.Now.ToString());
+                    sw.WriteLine(e.ToString());
+                    sw.WriteLine("Sidearm key: " + sidearm.Key);
+                    sw.WriteLine(String.Empty);
+                }
                 return (sidearm);
             }
         }
@@ -2534,6 +2621,29 @@ namespace PRoConEvents
                 }
             }
             return file.Trim();
+        }
+
+        public Int64 fixKey(Int64 key, category type)
+        {
+            if(replaces == null)
+            {
+                if (File.Exists(Path.Combine(base_path, @"LoadoutEnforcer\weapon_replaces.xml")))
+                {
+                    XmlSerializer deserializer = new XmlSerializer(typeof(List<Replace>));
+                    TextReader reader = new StreamReader(Path.Combine(base_path, @"LoadoutEnforcer\weapon_replaces.xml"));
+                    object obj = deserializer.Deserialize(reader);
+                    replaces = (List<Replace>)obj;
+                    reader.Close();
+                }
+                else
+                    return (key);
+            }
+
+            int index = replaces.FindIndex(f => f.old_key == key && f.type == type);
+            if (index > -1)
+                return (replaces[index].new_key);
+            else
+                return (key);
         }
 
         #region DIAGNOSTICS
