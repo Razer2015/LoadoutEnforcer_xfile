@@ -1393,11 +1393,11 @@ namespace PRoConEvents
 
         public override void OnPlayerJoin(string soldierName)
         {
+            String solttu = soldierName;
             Thread onjoin = new Thread(new ThreadStart(delegate ()
             {
                 try
                 {
-                    String solttu = soldierName;
                     Thread.Sleep(m_waitOnPlayerJoin * 1000);
                     fetchPlayerKit(solttu);
                     checkLimits(solttu, player_kits[solttu], false, false, false);
@@ -1428,11 +1428,12 @@ namespace PRoConEvents
             if (PlayersList == null)
                 return;
 
-            Player_Kit pKit = player_kits[playerInfo.SoldierName];
+            String solttu = playerInfo.SoldierName;
+            Player_Kit pKit = player_kits[solttu];
 
             if (pKit.LOADOUT_PREVIOUSLY_BAD)
             {
-                ServerCommand("admin.say", StripModifiers(E(String.Format("/{0} left the server without fixing his loadout!", playerInfo.SoldierName))), "all");
+                ServerCommand("admin.say", StripModifiers(E(String.Format("/{0} left the server without fixing his loadout!", solttu))), "all");
                 Boolean no_file = false;
                 if (!File.Exists(log_path))
                     no_file = true;
@@ -1444,7 +1445,7 @@ namespace PRoConEvents
                     if (!pKit.UNLOCKS.sc_handgrenades_unlocked && pKit.GRENADES != "2670747868")
                         m67_nade_equipped = true;
 
-                    sw.WriteLine(String.Format("{5},{0},{1},{2},{3},{4}", playerInfo.SoldierName, 
+                    sw.WriteLine(String.Format("{5},{0},{1},{2},{3},{4}", solttu, 
                         String.Join(";", pKit.NO_SPAWN.ToArray()), 
                         String.Join(";", pKit.ONE_SPAWN.ToArray()),
                         pKit.UNLOCKS.sc_handgrenades_unlocked.ToString(),
@@ -1456,18 +1457,21 @@ namespace PRoConEvents
 
             PlayersList.Remove(playerInfo);
 
-            if (player_kits.ContainsKey(playerInfo.SoldierName))
-                player_kits.Remove(playerInfo.SoldierName);
+            if (player_kits.ContainsKey(solttu))
+                player_kits.Remove(solttu);
         }
 
         public override void OnPlayerKilled(Kill kKillerVictimDetails)
         {
+            String solttu = kKillerVictimDetails.Killer.SoldierName;
+            String dType = kKillerVictimDetails.DamageType;
+            checkOnKill(solttu, dType, player_kits[solttu]);
             ServerCommand("listPlayers", "all");
-            checkOnKill(kKillerVictimDetails.Killer.SoldierName, kKillerVictimDetails.DamageType, player_kits[kKillerVictimDetails.Killer.SoldierName]);
         }
 
         public override void OnPlayerSpawned(string soldierName, Inventory spawnedInventory)
         {
+            String solttu = soldierName;
             GetAvailableMemory();
 
             if(m_spawnCount < 1)
@@ -1476,13 +1480,12 @@ namespace PRoConEvents
 
             ServerCommand("listPlayers", "all");
 
-            if (player_kits.ContainsKey(soldierName))
-                if (player_kits[soldierName].LOADOUT_PREVIOUSLY_BAD)
-                    ServerCommand("admin.yell", StripModifiers(E("Checking loadout!")), m_waitOnSpawn.ToString(), "player", soldierName);
+            if (player_kits.ContainsKey(solttu))
+                if (player_kits[solttu].LOADOUT_PREVIOUSLY_BAD)
+                    ServerCommand("admin.yell", StripModifiers(E("Checking loadout!")), m_waitOnSpawn.ToString(), "player", solttu);
 
             Thread delayed = new Thread(new ThreadStart(delegate ()
             {
-                String solttu = soldierName;
                 Thread.Sleep(m_waitOnSpawn * 1000);
                 fetchPlayerKit(solttu);
                 checkLimits(solttu, player_kits[solttu], true, false, true);
@@ -2355,26 +2358,27 @@ namespace PRoConEvents
         {
             try
             {
+                String solttu = soldierName;
                 Hashtable Loadout = null;
                 BattlelogClient bclient = new BattlelogClient();
-                if (!player_kits.ContainsKey(soldierName))
+                if (!player_kits.ContainsKey(solttu))
                 {
-                    player_kits.Add(soldierName, new Player_Kit());
-                    Loadout = bclient.getStats(soldierName);
+                    player_kits.Add(solttu, new Player_Kit());
+                    Loadout = bclient.getStats(solttu);
                 }
                 else
-                    Loadout = bclient.getStats(soldierName, player_kits[soldierName].personaID);
+                    Loadout = bclient.getStats(solttu, player_kits[solttu].personaID);
 
                 if (Loadout == null)
                     return (false);
 
-                player_kits[soldierName].personaID = Loadout["personaId"].ToString();
+                player_kits[solttu].personaID = Loadout["personaId"].ToString();
                 if (!Loadout.Contains("currentLoadout"))
                 {
                     if (Loadout.ContainsKey("error"))
                     {
-                        player_kits[soldierName].ERROR = true;
-                        ConsoleError(String.Format("^1Error: {0} ({1})", Loadout["error"].ToString(), soldierName));
+                        player_kits[solttu].ERROR = true;
+                        ConsoleError(String.Format("^1Error: {0} ({1})", Loadout["error"].ToString(), solttu));
                     }
                     return (false);
                 }
@@ -2383,13 +2387,13 @@ namespace PRoConEvents
                 {
                     if (Loadout.ContainsKey("error"))
                     {
-                        player_kits[soldierName].ERROR = true;
-                        ConsoleError(String.Format("^1Error: {0} ({1})", Loadout["error"].ToString(), soldierName));
+                        player_kits[solttu].ERROR = true;
+                        ConsoleError(String.Format("^1Error: {0} ({1})", Loadout["error"].ToString(), solttu));
                     }
                     return (false);
                 }
                 Hashtable playerStats = (Hashtable)Loadout["playerStats"];
-                player_kits[soldierName].UNLOCKS.sc_handgrenades = Convert.ToInt32(playerStats["sc_handgrenades"]);
+                player_kits[solttu].UNLOCKS.sc_handgrenades = Convert.ToInt32(playerStats["sc_handgrenades"]);
 
                 Hashtable currentLoadout = (Hashtable)Loadout["currentLoadout"];
 
@@ -2402,7 +2406,7 @@ namespace PRoConEvents
 
                 // Currently Selected Kit
                 byte selectedKit = Convert.ToByte(currentLoadout["selectedKit"]);
-                player_kits[soldierName].kit = (kits)selectedKit;
+                player_kits[solttu].kit = (kits)selectedKit;
 
                 // Kits
                 ArrayList kits = (ArrayList)currentLoadout["kits"];
@@ -2410,34 +2414,34 @@ namespace PRoConEvents
                 string[] Kit = ((IEnumerable)kits[selectedKit]).Cast<object>().Select(x => x.ToString()).ToArray();
 
                 // PRIMARY_WEAPON & attachments
-                player_kits[soldierName].PRIMARY_WEAPON.Key = fixKey(Convert.ToInt64(Kit[0]) , category.PRIMARY).ToString();
-                player_kits[soldierName].PRIMARY_WEAPON = getPrimaryAttachments(weapons, player_kits[soldierName].PRIMARY_WEAPON);
+                player_kits[solttu].PRIMARY_WEAPON.Key = fixKey(Convert.ToInt64(Kit[0]) , category.PRIMARY).ToString();
+                player_kits[solttu].PRIMARY_WEAPON = getPrimaryAttachments(weapons, player_kits[solttu].PRIMARY_WEAPON, solttu);
                 // SIDEARM & attachments
-                player_kits[soldierName].SIDEARM.Key = fixKey(Convert.ToInt64(Kit[1]) , category.SECONDARY).ToString();
-                player_kits[soldierName].SIDEARM = getSidearmAttachments(weapons, player_kits[soldierName].SIDEARM);
+                player_kits[solttu].SIDEARM.Key = fixKey(Convert.ToInt64(Kit[1]) , category.SECONDARY).ToString();
+                player_kits[solttu].SIDEARM = getSidearmAttachments(weapons, player_kits[solttu].SIDEARM, solttu);
                 // GADGET_1
-                player_kits[soldierName].GADGET_1 = fixKey(Convert.ToInt64(Kit[2]), category.GADGET1).ToString();
+                player_kits[solttu].GADGET_1 = fixKey(Convert.ToInt64(Kit[2]), category.GADGET1).ToString();
                 // GADGET_2
-                player_kits[soldierName].GADGET_2 = fixKey(Convert.ToInt64(Kit[3]), category.GADGET2).ToString();
+                player_kits[solttu].GADGET_2 = fixKey(Convert.ToInt64(Kit[3]), category.GADGET2).ToString();
                 // GRENADES
-                player_kits[soldierName].GRENADES = fixKey(Convert.ToInt64(Kit[4]), category.GRENADE).ToString();
+                player_kits[solttu].GRENADES = fixKey(Convert.ToInt64(Kit[4]), category.GRENADE).ToString();
                 // MELEE
-                player_kits[soldierName].MELEE = fixKey(Convert.ToInt64(Kit[5]), category.MELEE).ToString();
+                player_kits[solttu].MELEE = fixKey(Convert.ToInt64(Kit[5]), category.MELEE).ToString();
                 // FIELD_UPGRADES
-                player_kits[soldierName].FIELD_UPGRADES = fixKey(Convert.ToInt64(Kit[6]), category.SPECIALIZATION).ToString();
+                player_kits[solttu].FIELD_UPGRADES = fixKey(Convert.ToInt64(Kit[6]), category.SPECIALIZATION).ToString();
                 // UNK_7
                 //player_kits[soldierName].UNK_7 = Kit[7];
                 // UNK_8
                 //player_kits[soldierName].UNK_8 = Kit[8];
                 // OUTFIT
-                player_kits[soldierName].OUTFIT = Kit[9];
+                player_kits[solttu].OUTFIT = Kit[9];
                 // PARACHUTE_CAMOUFLAGE
-                player_kits[soldierName].PARACHUTE_CAMOUFLAGE = Kit[10];
+                player_kits[solttu].PARACHUTE_CAMOUFLAGE = Kit[10];
                 // UNK_11
                 //player_kits[soldierName].UNK_11 = Kit[11];
                 // UNK_12
                 //player_kits[soldierName].UNK_12 = Kit[12];
-                player_kits[soldierName].ERROR = false;
+                player_kits[solttu].ERROR = false;
 
                 return (true);
             }
@@ -2454,7 +2458,7 @@ namespace PRoConEvents
             }
         }
 
-        private PRIMARY_WEAPON getPrimaryAttachments(Hashtable weapons, PRIMARY_WEAPON primary_weapon)
+        private PRIMARY_WEAPON getPrimaryAttachments(Hashtable weapons, PRIMARY_WEAPON primary_weapon, String soldierName)
         {
             try
             {
@@ -2489,18 +2493,18 @@ namespace PRoConEvents
                 primary_weapon.PAINT = "0";
                 primary_weapon.AMMO = "0";
 
-                DebugWrite("Couldn't find weapon with ID: " + primary_weapon.Key, 3);
+                DebugWrite("Couldn't find weapon with ID: " + primary_weapon.Key + " Player: " + soldierName, 3);
                 using (StreamWriter sw = new StreamWriter(Path.ChangeExtension(log_path, ".err")))
                 {
                     sw.WriteLine(DateTime.Now.ToString());
                     sw.WriteLine(e.ToString());
-                    sw.WriteLine("Weapon key: " + primary_weapon.Key);
+                    sw.WriteLine("Weapon key: " + primary_weapon.Key + " Player: " + soldierName);
                     sw.WriteLine(String.Empty);
                 }
                 return (primary_weapon);
             }
         }
-        private SIDEARM getSidearmAttachments(Hashtable weapons, SIDEARM sidearm)
+        private SIDEARM getSidearmAttachments(Hashtable weapons, SIDEARM sidearm, String soldierName)
         {
             try
             {
@@ -2529,12 +2533,12 @@ namespace PRoConEvents
                 sidearm.BARREL = "0";
                 sidearm.PAINT = "0";
 
-                DebugWrite("Couldn't find sidearm with ID: " + sidearm.Key, 3);
+                DebugWrite("Couldn't find sidearm with ID: " + sidearm.Key + " Player: " + soldierName, 3);
                 using (StreamWriter sw = new StreamWriter(Path.ChangeExtension(log_path, ".err")))
                 {
                     sw.WriteLine(DateTime.Now.ToString());
                     sw.WriteLine(e.ToString());
-                    sw.WriteLine("Sidearm key: " + sidearm.Key);
+                    sw.WriteLine("Sidearm key: " + sidearm.Key + " Player: " + soldierName);
                     sw.WriteLine(String.Empty);
                 }
                 return (sidearm);
